@@ -902,7 +902,10 @@ button:focus-visible, .ammo-tray:focus-visible { outline: 2px solid var(--accent
 .gm-view.is-visible { display: flex; flex-direction: column; }
 body.is-gm { min-height: 100vh; overflow: hidden; }
 body.is-gm #app { min-height: 100vh; }
-body.role-pending #app > .topbar,\nbody.role-pending #app > .weapons-section,\nbody.role-pending #app > .ammo-section,\nbody.role-pending #app > .action-bar,\nbody.is-gm #app > .topbar,
+body.role-pending #app > .topbar,
+body.role-pending #app > .weapons-section,
+body.role-pending #app > .ammo-section,
+body.role-pending #app > .action-bar,\nbody.is-gm #app > .topbar,
 body.is-gm #app > .weapons-section,
 body.is-gm #app > .ammo-section,
 body.is-gm #app > .action-bar {
