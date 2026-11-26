@@ -60,8 +60,18 @@ test("o navegador recebe URLs versionadas para não reutilizar módulos e sons a
   assert.match(indexHtml, /href="\.\/src\/styles\.css\?v=[^"]+"/);
   assert.match(appSource, /from "\.\/sound\.js\?v=[^"]+"/);
   assert.ok(appSource.includes('src="./assets/weapons/${weapon.id}.svg?v=weapon-icons-'));
-  assert.equal(manifest.version, "1.1.1");
-  assert.match(manifest.action.popover, /\?v=gm-audit-/);
+  assert.equal(manifest.version, "1.1.2");
+  assert.match(manifest.action.popover, /\?v=gm-host-/);
+});
+
+
+test("manifesto aponta para o site GitHub Pages do repositório atual", async () => {
+  const manifest = JSON.parse(await readFile(resolve(root, "manifest.json"), "utf8"));
+  const currentPages = "https://onze1onze.github.io/Sistema-Armas-de-fogo/";
+  assert.equal(manifest.icon, `${currentPages}icon.svg`);
+  assert.equal(manifest.action.icon, `${currentPages}icon.svg`);
+  assert.ok(manifest.action.popover.startsWith(currentPages));
+  assert.equal(manifest.action.popover.includes("/Ficha-Onze/"), false);
 });
 
 test("todos os caminhos de áudio são locais ao projeto", async () => {

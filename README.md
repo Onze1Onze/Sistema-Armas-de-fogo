@@ -40,9 +40,9 @@ Quando o mestre abre a extensão, vê apenas o monitor dos participantes conecta
 
 O site da extensão é publicado pelo GitHub Pages. Adicione este manifesto no gerenciador de extensões do Owlbear Rodeo:
 
-`https://raw.githubusercontent.com/Onze1Onze/Ficha-Onze/main/manifest.json`
+`https://raw.githubusercontent.com/Onze1Onze/Sistema-Armas-de-fogo/main/manifest.json`
 
-A página do popover e o ícone são servidos por `https://onze1onze.github.io/Ficha-Onze/`. O manifesto aponta para URLs absolutas do Pages para não depender do diretório-base do iframe.
+A página do popover e o ícone são servidos por `https://onze1onze.github.io/Sistema-Armas-de-fogo/`. O manifesto aponta para URLs absolutas do Pages para não depender do diretório-base do iframe.
 
 ## Testes locais
 
