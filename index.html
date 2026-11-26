@@ -11,6 +11,24 @@
   </head>
   <body>
     <main id="app" aria-label="Arsenal de armas e munição">
+      <section class="gm-view" id="gm-view" aria-label="Monitor de munição do mestre">
+        <header class="gm-topbar">
+          <div><span class="brand-name">ARSENAL</span><span class="gm-role">MESTRE</span></div>
+          <span class="sync-status is-connected" title="Monitorando os jogadores conectados ao Owlbear Rodeo">
+            <span class="status-dot" aria-hidden="true"></span><span>OBR • MONITOR</span>
+          </span>
+        </header>
+        <section class="gm-section" aria-labelledby="gm-players-label">
+          <div class="section-heading">
+            <span class="section-label" id="gm-players-label">JOGADORES</span>
+            <span class="section-meta" id="gm-player-total">0 CONECTADOS</span>
+          </div>
+          <div class="gm-player-list" id="gm-player-list"></div>
+        </section>
+        <footer class="gm-action-bar">
+          <button class="gm-simulator-button" id="gm-simulator-button" type="button">SIMULADOR</button>
+        </footer>
+      </section>
       <header class="topbar">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
