@@ -57,10 +57,10 @@ test("o navegador recebe URLs versionadas para não reutilizar módulos e sons a
   const manifest = JSON.parse(await readFile(resolve(process.cwd(), "manifest.json"), "utf8"));
 
   assert.match(indexHtml, /src="\.\/src\/app\.js\?v=[^"]+"/);
-  assert.match(indexHtml, /href="\.\/src\/styles\.css\?v=[^"]+"/);
+  assert.match(indexHtml, /src="\.\/src\/app\.js\?v=gm-host-/);
   assert.match(appSource, /from "\.\/sound\.js\?v=[^"]+"/);
   assert.ok(appSource.includes('src="./assets/weapons/${weapon.id}.svg?v=weapon-icons-'));
-  assert.equal(manifest.version, "1.1.2");
+  assert.equal(manifest.version, "1.1.3");
   assert.match(manifest.action.popover, /\?v=gm-host-/);
 });
 
