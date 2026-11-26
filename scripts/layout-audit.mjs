@@ -511,6 +511,7 @@ try {
       const player = {
         id: "sync-regression-player",
         metadata: {},
+        async getRole() { return "PLAYER"; },
         async getMetadata() {
           await new Promise((resolve) => setTimeout(resolve, 900));
           return { "com.onze1.ficha-onze.weapon-ammo": remote };
