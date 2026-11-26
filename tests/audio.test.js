@@ -60,7 +60,7 @@ test("o navegador recebe URLs versionadas para não reutilizar módulos e sons a
   assert.match(indexHtml, /href="\.\/src\/styles\.css\?v=[^"]+"/);
   assert.match(appSource, /from "\.\/sound\.js\?v=[^"]+"/);
   assert.ok(appSource.includes('src="./assets/weapons/${weapon.id}.svg?v=weapon-icons-'));
-  assert.equal(manifest.version, "1.0.3");
+  assert.equal(manifest.version, "1.1.0");
   assert.match(manifest.action.popover, /\?v=weapon-icons-/);
 });
 
