@@ -74,3 +74,32 @@ test("o mestre mostra apenas participantes PLAYER e escapa IDs de conexão", asy
   assert.ok(app.includes('filter((player) => player?.role === "PLAYER")'));
   assert.ok(app.includes('data-player-id="${escapeHtml(status.id)}"'));
 });
+
+
+test("o simulador tem fallback quando a abertura do modal falha", async () => {
+  const app = await read("src/app.js");
+  const start = app.indexOf("async function openSimulator");
+  const end = app.indexOf("function releaseOwlbearListeners", start);
+  const source = app.slice(start, end);
+  assert.match(source, /try \{/);
+  assert.match(source, /catch \(error\)/);
+  assert.match(source, /window\.location\.assign\(simulatorUrl\)/);
+  assert.match(source, /if \(isOpeningSimulator\) return/);
+});
+
+test("listeners da party e do jogador são removidos no pagehide", async () => {
+  const app = await read("src/app.js");
+  assert.match(app, /window\.addEventListener\("pagehide", releaseOwlbearListeners, \{ once: true \}\)/);
+  assert.match(app, /gmPartyUnsubscribe = obr\.party\.onChange\(refresh\)/);
+  assert.match(app, /playerChangeUnsubscribe = candidate\.player\.onChange/);
+  assert.match(app, /unsubscribe\(\)/);
+});
+
+test("a leitura inicial da party não sobrescreve um evento mais recente", async () => {
+  const app = await read("src/app.js");
+  const start = app.indexOf("async function setupGMDashboard");
+  const end = app.indexOf("function renderWeaponCards", start);
+  const source = app.slice(start, end);
+  assert.ok(source.indexOf("obr.party.onChange(refresh)") < source.indexOf("obr.party.getPlayers()"));
+  assert.match(source, /if \(partyRevision === initialRevision\) refresh\(players\)/);
+});
