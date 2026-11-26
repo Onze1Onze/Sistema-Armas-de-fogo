@@ -18,7 +18,7 @@ test("a extensão consulta a party do Owlbear e reage a entrada, saída e mudan�
   assert.match(app, /candidate\.player\.getRole\(\)/);
   assert.match(app, /obr\.party\.getPlayers\(\)/);
   assert.match(app, /obr\.party\.onChange\(/);
-  assert.match(app, /player\.metadata\?\[METADATA_KEY\]/);
+  assert.ok(app.includes("player?.metadata?.[METADATA_KEY]"));
 });
 
 test("o monitor do mestre não altera o armazenamento dos jogadores", async () => {
