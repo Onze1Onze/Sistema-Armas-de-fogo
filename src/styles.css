@@ -888,3 +888,125 @@ button:focus-visible, .ammo-tray:focus-visible { outline: 2px solid var(--accent
 @media (prefers-reduced-motion: reduce) {
   .weapon-card, .ammo-slot, .action-button { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+
+/* GM monitor: additive interface, intentionally square and compact. */
+.gm-view {
+  display: none;
+  min-height: 100%;
+  box-sizing: border-box;
+  background: #111512;
+  color: #d9e1d8;
+  padding: 14px;
+}
+.gm-view.is-visible { display: flex; flex-direction: column; }
+body.is-gm { min-height: 100vh; overflow: hidden; }
+body.is-gm #app { min-height: 100vh; }
+.gm-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  border-bottom: 1px solid rgba(193,212,161,.18);
+  padding-bottom: 10px;
+}
+.gm-topbar > div { display: flex; align-items: baseline; gap: 10px; }
+.gm-role {
+  font-size: 10px;
+  letter-spacing: .18em;
+  color: #8e9b8d;
+}
+.gm-section { flex: 1; min-height: 0; padding-top: 14px; }
+.gm-player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 8px;
+  border-top: 1px solid rgba(193,212,161,.14);
+}
+.gm-player-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 58px;
+  border-bottom: 1px solid rgba(193,212,161,.12);
+  padding: 8px 0;
+}
+.gm-player-name {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.gm-player-name strong {
+  color: #e2e9e0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gm-player-name span {
+  color: #8f9b8e;
+  font-size: 10px;
+  letter-spacing: .13em;
+}
+.gm-player-ammo {
+  min-width: 74px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.gm-player-ammo strong {
+  color: #c1d4a1;
+  font-size: 23px;
+  line-height: 1;
+}
+.gm-player-ammo span {
+  color: #778277;
+  font-size: 11px;
+  margin-left: 3px;
+}
+.gm-empty {
+  border: 1px solid rgba(193,212,161,.12);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #8f9b8e;
+}
+.gm-empty span {
+  color: #b9c5b7;
+  font-size: 11px;
+  letter-spacing: .14em;
+}
+.gm-empty small { font-size: 11px; line-height: 1.45; }
+.gm-action-bar {
+  padding-top: 12px;
+  border-top: 1px solid rgba(193,212,161,.18);
+}
+.gm-simulator-button {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(193,212,161,.34);
+  border-radius: 0;
+  background: #181d19;
+  color: #c1d4a1;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  cursor: pointer;
+}
+.gm-simulator-button:hover {
+  background: #202720;
+  border-color: rgba(193,212,161,.62);
+}
+.gm-simulator-button:active { transform: translateY(1px); }
+
+@media (max-width: 380px) {
+  .gm-view { padding: 12px; }
+  .gm-player-row { min-height: 54px; }
+  .gm-player-name strong { font-size: 13px; }
+  .gm-player-ammo strong { font-size: 21px; }
+}
