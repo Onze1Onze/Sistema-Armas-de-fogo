@@ -29,6 +29,10 @@ const elements = {
   syncStatus: document.querySelector("#sync-status"),
   syncLabel: document.querySelector("#sync-label"),
   announcement: document.querySelector("#status-announcement"),
+  gmView: document.querySelector("#gm-view"),
+  gmPlayerList: document.querySelector("#gm-player-list"),
+  gmPlayerTotal: document.querySelector("#gm-player-total"),
+  gmSimulatorButton: document.querySelector("#gm-simulator-button"),
 };
 
 let state = createInitialState();
@@ -39,8 +43,105 @@ let lastSavedJSON = "";
 let isReloadAnimating = false;
 let isConnectingOwlbear = false;
 let pendingLocalOperations = [];
+let currentRole = "PLAYER";
+let gmPartyUnsubscribe;
+let isSimulatorMode = new URLSearchParams(window.location.search).get("mode") === "simulator";
 
 
+
+
+
+function showPlayerView() {
+  document.body.classList.remove("is-gm");
+  elements.gmView?.classList.remove("is-visible");
+  elements.gmView?.setAttribute("aria-hidden", "true");
+}
+
+function showGMView() {
+  document.body.classList.add("is-gm");
+  elements.gmView?.classList.add("is-visible");
+  elements.gmView?.removeAttribute("aria-hidden");
+}
+
+function playerStatus(player) {
+  const snapshot = normalizeState(player?.metadata?.[METADATA_KEY]);
+  const weapon = getWeapon(snapshot.selectedWeapon);
+  return {
+    id: player?.id ?? player?.connectionId ?? "unknown",
+    name: String(player?.name ?? "Jogador"),
+    weapon: weapon.name,
+    remaining: remainingAmmo(snapshot, weapon.id),
+    capacity: weapon.capacity,
+  };
+}
+
+async function resolvePlayerStatus(player) {
+  const status = playerStatus(player);
+  try {
+    if (typeof player?.getName === "function") status.name = await player.getName();
+  } catch (error) {
+    console.warn("Não foi possível obter o nome de um jogador.", error);
+  }
+  return status;
+}
+
+async function renderGMParty(players) {
+  if (!elements.gmPlayerList) return;
+  const playerObjects = (players ?? []).filter((player) => player?.role !== "GM");
+  const statuses = await Promise.all(playerObjects.map(resolvePlayerStatus));
+
+  statuses.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  elements.gmPlayerTotal.textContent = `${statuses.length} CONECTADO${statuses.length === 1 ? "" : "S"}`;
+
+  if (statuses.length === 0) {
+    elements.gmPlayerList.innerHTML = `
+      <div class="gm-empty">
+        <span>NENHUM JOGADOR CONECTADO</span>
+        <small>Os jogadores aparecerão aqui quando entrarem na sessão.</small>
+      </div>`;
+    return;
+  }
+
+  elements.gmPlayerList.innerHTML = statuses.map((status) => `
+    <article class="gm-player-row" data-player-id="${status.id}">
+      <div class="gm-player-name">
+        <strong>${escapeHtml(status.name)}</strong>
+        <span>${escapeHtml(status.weapon.toLocaleUpperCase("pt-BR"))}</span>
+      </div>
+      <div class="gm-player-ammo" aria-label="${status.remaining} de ${status.capacity} balas">
+        <strong>${status.remaining}</strong><span>/ ${status.capacity}</span>
+      </div>
+    </article>`).join("");
+}
+
+function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[character]));
+}
+
+async function openSimulator() {
+  if (!obr?.modal) {
+    window.location.assign("./?mode=simulator");
+    return;
+  }
+  await obr.modal.open({
+    id: "com.onze1.ficha-onze.arsenal-simulator",
+    url: new URL("./?mode=simulator", window.location.href).href,
+    width: 440,
+    height: 680,
+  });
+}
+
+async function setupGMDashboard() {
+  showGMView();
+  const refresh = async (players) => renderGMParty(players);
+  const players = await obr.party.getPlayers();
+  await refresh(players);
+  gmPartyUnsubscribe = obr.party.onChange(refresh);
+  elements.gmSimulatorButton?.addEventListener("click", openSimulator);
+  setStorageStatus("obr");
+}
 
 function renderWeaponCards() {
   elements.weaponGrid.innerHTML = WEAPONS.map((weapon) => {
@@ -260,7 +361,18 @@ async function connectOwlbear() {
     }
 
     await new Promise((resolve) => candidate.onReady(resolve));
+    currentRole = await candidate.player.getRole();
     const playerId = candidate.player.id || await candidate.player.getId();
+
+    if (currentRole === "GM" && !isSimulatorMode) {
+      obr = candidate;
+      isConnectingOwlbear = false;
+      pendingLocalOperations = [];
+      await setupGMDashboard();
+      console.info(`Arsenal conectado ao Owlbear Rodeo como mestre ${playerId}.`);
+      return true;
+    }
+
     const metadata = await candidate.player.getMetadata();
     const storedState = metadata?.[METADATA_KEY];
     const queuedOperations = [...pendingLocalOperations];
@@ -303,12 +415,23 @@ async function connectOwlbear() {
 
 async function start() {
   preloadWeaponAudio();
+
+  // The simulator deliberately stays local so the GM can fire without modifying
+  // the GM's player metadata or any player's real ammunition.
+  if (isSimulatorMode) {
+    showPlayerView();
+    restoreLocalState();
+    render();
+    bindEvents();
+    return;
+  }
+
   restoreLocalState();
   render();
   bindEvents();
 
   const connected = await connectOwlbear();
-  if (connected) render();
+  if (connected && currentRole !== "GM") render();
 }
 
 start();
