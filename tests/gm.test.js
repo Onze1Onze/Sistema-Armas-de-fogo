@@ -43,3 +43,34 @@ test("o simulador usa o mesmo painel de armas em modo local", async () => {
   assert.match(app, /if \(isSimulatorMode\)/);
   assert.match(app, /restoreLocalState\(\);/);
 });
+
+test("o nome remoto vem dos metadados publicados pelo próprio jogador", async () => {
+  const app = await read("src/app.js");
+  assert.ok(app.includes('const PLAYER_NAME_KEY = "com.onze1.ficha-onze.weapon-ammo.player-name"'));
+  assert.ok(app.includes("await player.getName()"));
+  assert.ok(app.includes("await player.setMetadata({ [PLAYER_NAME_KEY]: name })"));
+  assert.ok(app.includes("metadata[PLAYER_NAME_KEY]"));
+  const status = app.slice(app.indexOf("function playerStatus"), app.indexOf("function renderWeaponCards"));
+  assert.equal(status.includes("getName"), false);
+});
+
+test("a interface normal reaparece quando o SDK está indisponível ou falha", async () => {
+  const app = await read("src/app.js");
+  const unavailableStart = app.indexOf("if (!candidate?.isAvailable)");
+  const unavailableEnd = app.indexOf("await new Promise", unavailableStart);
+  assert.ok(unavailableStart >= 0 && app.slice(unavailableStart, unavailableEnd).includes("showPlayerView()"));
+  assert.ok(app.includes('console.warn("SDK do Owlbear indisponível; usando armazenamento local.", error);\n    showPlayerView();'));
+});
+
+test("o jogador identificado deixa o estado pendente antes da sincronização", async () => {
+  const app = await read("src/app.js");
+  const playerStart = app.indexOf("// A confirmed player must leave the pending state");
+  const metadataStart = app.indexOf("const metadata = await candidate.player.getMetadata()", playerStart);
+  assert.ok(playerStart >= 0 && app.slice(playerStart, metadataStart).includes("showPlayerView()"));
+});
+
+test("o mestre mostra apenas participantes PLAYER e escapa IDs de conexão", async () => {
+  const app = await read("src/app.js");
+  assert.ok(app.includes('filter((player) => player?.role === "PLAYER")'));
+  assert.ok(app.includes('data-player-id="${escapeHtml(status.id)}"'));
+});

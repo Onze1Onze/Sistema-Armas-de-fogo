@@ -308,6 +308,131 @@ try {
     await page.close();
   }
 
+  // Test the GM dashboard against the actual Owlbear Player record shape.
+  const gmPage = await browser.newPage({ viewport: { width: 440, height: 820 } });
+  const gmErrors = [];
+  gmPage.on("pageerror", (error) => gmErrors.push(error.message));
+  const gmSdk = `
+    const AMMO_KEY = "com.onze1.ficha-onze.weapon-ammo";
+    const NAME_KEY = "com.onze1.ficha-onze.weapon-ammo.player-name";
+    const stateFor = (weapon, capacity, spent = []) => ({
+      version: 1,
+      selectedWeapon: weapon,
+      ammo: { [weapon]: { spent: Array.from({ length: capacity }, (_, index) => spent.includes(index)) } }
+    });
+    const players = [
+      { id: "ana-user", connectionId: "ana-connection", role: "PLAYER", metadata: {
+        [NAME_KEY]: "Ana", [AMMO_KEY]: stateFor("pistol", 12, [0])
+      }},
+      { id: "bruno-user", connectionId: "bruno-connection", role: "PLAYER", metadata: {
+        [NAME_KEY]: "Bruno", [AMMO_KEY]: stateFor("revolver", 6, [0, 2])
+      }}
+    ];
+    let partyCallback;
+    window.__gmHarness = {
+      players,
+      metadataWrites: [],
+      modalCalls: [],
+      updateAna() {
+        players[0].metadata[AMMO_KEY] = stateFor("pistol", 12, [0, 1]);
+        partyCallback?.(players);
+      }
+    };
+    const player = {
+      id: "gm-user",
+      async getRole() { return "GM"; },
+      async getId() { return "gm-user"; },
+      async getMetadata() { return {}; },
+      async setMetadata(update) { window.__gmHarness.metadataWrites.push(update); }
+    };
+    export default {
+      isAvailable: true,
+      onReady(callback) { callback(); },
+      player,
+      party: {
+        async getPlayers() { return players; },
+        onChange(callback) { partyCallback = callback; return () => { partyCallback = null; }; }
+      },
+      modal: {
+        async open(modal) { window.__gmHarness.modalCalls.push(modal); }
+      }
+    };
+  `;
+  await gmPage.route("https://esm.sh/**", (route) => route.fulfill({
+    status: 200, contentType: "text/javascript", body: gmSdk,
+  }));
+  await gmPage.goto("http://127.0.0.1:4179/", { waitUntil: "networkidle" });
+  await gmPage.waitForFunction(() => document.querySelectorAll(".gm-player-row").length === 2);
+  assert.equal(await gmPage.locator("body").evaluate((body) => body.classList.contains("is-gm")), true);
+  assert.equal(await gmPage.locator("#weapon-grid").isVisible(), false,
+    "O mestre não deve ver o painel individual dos jogadores");
+  assert.deepEqual(await gmPage.locator(".gm-player-name strong").allTextContents(), ["Ana", "Bruno"],
+    "O monitor deve exibir os nomes publicados nos metadados individuais");
+  assert.deepEqual(
+    await gmPage.locator(".gm-player-ammo").allTextContents().then((values) => values.map((value) => value.replace(/\\s+/g, " ").trim())),
+    ["11/ 12", "4/ 6"]
+  );
+  await gmPage.evaluate(() => window.__gmHarness.updateAna());
+  await gmPage.waitForFunction(() => document.querySelector(".gm-player-row .gm-player-ammo strong")?.textContent === "10");
+  await gmPage.locator("#gm-simulator-button").click();
+  const openedModal = await gmPage.evaluate(() => window.__gmHarness.modalCalls[0]);
+  assert.equal(openedModal?.id, "com.onze1.ficha-onze.arsenal-simulator");
+  assert.match(openedModal?.url ?? "", /mode=simulator/);
+  assert.equal(openedModal?.width, 440);
+  assert.equal(await gmPage.evaluate(() => window.__gmHarness.metadataWrites.length), 0,
+    "O monitor do mestre não deve escrever nos metadados de ninguém");
+  assert.deepEqual(gmErrors, [], "O painel do mestre não deve produzir erros JavaScript");
+  await gmPage.close();
+  console.log("GM dashboard OK: nomes, arma, munição, atualização ao vivo e simulador.");
+
+  // A player session publishes the current display name for the GM monitor.
+  const playerPage = await browser.newPage({ viewport: { width: 360, height: 820 } });
+  const playerSdk = `
+    const metadata = {};
+    window.__playerHarness = { metadata, writes: [] };
+    const player = {
+      id: "player-current",
+      async getRole() { return "PLAYER"; },
+      async getMetadata() { return metadata; },
+      async getName() { return "Marina"; },
+      onChange() { return () => {}; },
+      async setMetadata(update) {
+        Object.assign(metadata, update);
+        window.__playerHarness.writes.push(update);
+      }
+    };
+    export default { isAvailable: true, onReady(callback) { callback(); }, player };
+  `;
+  await playerPage.route("https://esm.sh/**", (route) => route.fulfill({
+    status: 200, contentType: "text/javascript", body: playerSdk,
+  }));
+  await playerPage.goto("http://127.0.0.1:4179/", { waitUntil: "networkidle" });
+  await playerPage.waitForFunction(() =>
+    window.__playerHarness?.metadata?.["com.onze1.ficha-onze.weapon-ammo.player-name"] === "Marina"
+  );
+  assert.equal(await playerPage.locator("#weapon-grid").isVisible(), true,
+    "Jogadores identificados devem ver o painel de armas");
+  await playerPage.close();
+  console.log("Player identity sync OK: nome do usuário sincronizado e painel visível.");
+
+  // The simulator stays local and does not initialize the Owlbear SDK.
+  const simulatorPage = await browser.newPage({ viewport: { width: 360, height: 820 } });
+  let simulatorSdkRequests = 0;
+  await simulatorPage.route("https://esm.sh/**", (route) => {
+    simulatorSdkRequests += 1;
+    return route.fulfill({ status: 200, contentType: "text/javascript", body: "export default { isAvailable: true };" });
+  });
+  await simulatorPage.goto("http://127.0.0.1:4179/?mode=simulator", { waitUntil: "networkidle" });
+  await simulatorPage.waitForFunction(() => document.querySelectorAll(".weapon-card").length === 8);
+  assert.equal(await simulatorPage.locator("body").evaluate((body) => body.classList.contains("is-gm")), false);
+  assert.equal(simulatorSdkRequests, 0, "O simulador não deve iniciar conexão com o Owlbear");
+  await simulatorPage.locator('[data-ammo-index="0"]').click();
+  assert.equal(await simulatorPage.locator("#ammo-remaining").textContent(), "11");
+  assert.ok(await simulatorPage.evaluate(() => localStorage.getItem("ficha-onze:weapon-ammo:v1")),
+    "O simulador deve persistir no armazenamento local");
+  await simulatorPage.close();
+  console.log("Simulator isolation OK: disparos locais sem alterar munição real.");
+
   // Web Audio may exist before its file buffers finish decoding. In that window,
   // the app must still play the mapped local file instead of a synthesized substitute.
   const pendingDecodePage = await browser.newPage({ viewport: { width: 360, height: 820 } });

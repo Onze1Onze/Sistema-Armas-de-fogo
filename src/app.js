@@ -10,11 +10,12 @@ import {
   remainingAmmo,
   reloadWeapon,
   selectWeapon,
-} from "./weapons.js?v=audiofix-20261116-3";
-import { AMMO_SVGS } from "./ammunition.js?v=audiofix-20261116-3";
-import { playBurst, playWeaponReload, playWeaponShot, preloadWeaponAudio } from "./sound.js?v=audiofix-20261116-3";
+} from "./weapons.js?v=gm-audit-20261126-1";
+import { AMMO_SVGS } from "./ammunition.js?v=gm-audit-20261126-1";
+import { playBurst, playWeaponReload, playWeaponShot, preloadWeaponAudio } from "./sound.js?v=gm-audit-20261126-1";
 
 const METADATA_KEY = "com.onze1.ficha-onze.weapon-ammo";
+const PLAYER_NAME_KEY = "com.onze1.ficha-onze.weapon-ammo.player-name";
 const LOCAL_STORAGE_KEY = "ficha-onze:weapon-ammo:v1";
 const SDK_URL = "https://esm.sh/@owlbear-rodeo/sdk@3.1.0";
 
@@ -66,31 +67,26 @@ function showGMView() {
 }
 
 function playerStatus(player) {
-  const snapshot = normalizeState(player?.metadata?.[METADATA_KEY]);
+  const metadata = player?.metadata ?? {};
+  const snapshot = normalizeState(metadata[METADATA_KEY]);
   const weapon = getWeapon(snapshot.selectedWeapon);
+  const connectionId = String(player?.connectionId ?? player?.id ?? "sem-id");
+  const storedName = metadata[PLAYER_NAME_KEY];
   return {
-    id: player?.id ?? player?.connectionId ?? "unknown",
-    name: String(player?.name ?? "Jogador"),
+    id: connectionId,
+    name: typeof storedName === "string" && storedName.trim()
+      ? storedName.trim()
+      : `Jogador ${connectionId.slice(0, 6)}`,
     weapon: weapon.name,
     remaining: remainingAmmo(snapshot, weapon.id),
     capacity: weapon.capacity,
   };
 }
 
-async function resolvePlayerStatus(player) {
-  const status = playerStatus(player);
-  try {
-    if (typeof player?.getName === "function") status.name = await player.getName();
-  } catch (error) {
-    console.warn("Não foi possível obter o nome de um jogador.", error);
-  }
-  return status;
-}
-
-async function renderGMParty(players) {
+function renderGMParty(players) {
   if (!elements.gmPlayerList) return;
-  const playerObjects = (players ?? []).filter((player) => player?.role !== "GM");
-  const statuses = await Promise.all(playerObjects.map(resolvePlayerStatus));
+  const playerObjects = (players ?? []).filter((player) => player?.role === "PLAYER");
+  const statuses = playerObjects.map(playerStatus);
 
   statuses.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   elements.gmPlayerTotal.textContent = `${statuses.length} CONECTADO${statuses.length === 1 ? "" : "S"}`;
@@ -105,7 +101,7 @@ async function renderGMParty(players) {
   }
 
   elements.gmPlayerList.innerHTML = statuses.map((status) => `
-    <article class="gm-player-row" data-player-id="${status.id}">
+    <article class="gm-player-row" data-player-id="${escapeHtml(status.id)}">
       <div class="gm-player-name">
         <strong>${escapeHtml(status.name)}</strong>
         <span>${escapeHtml(status.weapon.toLocaleUpperCase("pt-BR"))}</span>
@@ -117,7 +113,7 @@ async function renderGMParty(players) {
 }
 
 function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (character) => ({
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[character]));
 }
@@ -137,9 +133,9 @@ async function openSimulator() {
 
 async function setupGMDashboard() {
   showGMView();
-  const refresh = async (players) => renderGMParty(players);
+  const refresh = (players) => renderGMParty(players);
   const players = await obr.party.getPlayers();
-  await refresh(players);
+  refresh(players);
   gmPartyUnsubscribe = obr.party.onChange(refresh);
   elements.gmSimulatorButton?.addEventListener("click", openSimulator);
   setStorageStatus("obr");
@@ -328,6 +324,19 @@ function handleReload() {
   }, 620);
 }
 
+async function syncCurrentPlayerName(player, knownMetadata = null) {
+  if (typeof player?.getName !== "function" || typeof player?.setMetadata !== "function") return;
+  try {
+    const name = String(await player.getName() ?? "").trim();
+    if (!name) return;
+    const metadata = knownMetadata ?? await player.getMetadata();
+    if (metadata?.[PLAYER_NAME_KEY] === name) return;
+    await player.setMetadata({ [PLAYER_NAME_KEY]: name });
+  } catch (error) {
+    console.warn("Não foi possível sincronizar o nome do jogador para o monitor do mestre.", error);
+  }
+}
+
 function bindEvents() {
   elements.weaponGrid.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-weapon]");
@@ -359,6 +368,7 @@ async function connectOwlbear() {
     if (!candidate?.isAvailable) {
       isConnectingOwlbear = false;
       pendingLocalOperations = [];
+      showPlayerView();
       return false;
     }
 
@@ -375,7 +385,10 @@ async function connectOwlbear() {
       return true;
     }
 
+    // A confirmed player must leave the pending state and see the weapon panel.
+    showPlayerView();
     const metadata = await candidate.player.getMetadata();
+    await syncCurrentPlayerName(candidate.player, metadata);
     const storedState = metadata?.[METADATA_KEY];
     const queuedOperations = [...pendingLocalOperations];
 
@@ -390,7 +403,8 @@ async function connectOwlbear() {
     // Player metadata belongs to the current Owlbear player, not to shared room state.
     // Each participant therefore writes only their own namespaced metadata entry.
     candidate.player.onChange((player) => {
-      const incoming = player.metadata?.[METADATA_KEY];
+      void syncCurrentPlayerName(candidate.player, player?.metadata);
+      const incoming = player?.metadata?.[METADATA_KEY];
       if (!incoming) return;
       const normalized = normalizeState(incoming);
       const serialized = JSON.stringify(normalized);
@@ -411,6 +425,7 @@ async function connectOwlbear() {
     isConnectingOwlbear = false;
     pendingLocalOperations = [];
     console.warn("SDK do Owlbear indisponível; usando armazenamento local.", error);
+    showPlayerView();
     return false;
   }
 }
