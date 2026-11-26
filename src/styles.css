@@ -902,6 +902,13 @@ button:focus-visible, .ammo-tray:focus-visible { outline: 2px solid var(--accent
 .gm-view.is-visible { display: flex; flex-direction: column; }
 body.is-gm { min-height: 100vh; overflow: hidden; }
 body.is-gm #app { min-height: 100vh; }
+body.is-gm #app > .topbar,
+body.is-gm #app > .weapons-section,
+body.is-gm #app > .ammo-section,
+body.is-gm #app > .action-bar {
+  display: none !important;
+}
+
 .gm-topbar {
   display: flex;
   align-items: center;
