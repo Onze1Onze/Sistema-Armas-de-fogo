@@ -66,7 +66,7 @@ test("o navegador recebe URLs versionadas para não reutilizar módulos e sons a
 
 
 test("manifesto aponta para o site GitHub Pages do repositório atual", async () => {
-  const manifest = JSON.parse(await readFile(resolve(root, "manifest.json"), "utf8"));
+  const manifest = JSON.parse(await readFile(resolve(process.cwd(), "manifest.json"), "utf8"));
   const currentPages = "https://onze1onze.github.io/Sistema-Armas-de-fogo/";
   assert.equal(manifest.icon, `${currentPages}icon.svg`);
   assert.equal(manifest.action.icon, `${currentPages}icon.svg`);
