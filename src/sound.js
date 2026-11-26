@@ -1,5 +1,5 @@
 const SOUND_BASE = new URL("../assets/audio/weapons/", import.meta.url);
-const AUDIO_REVISION = "audiofix-20261116-3";
+const AUDIO_REVISION = "audiofix-20261126-4";
 
 export const WEAPON_AUDIO = Object.freeze({
   pistol: Object.freeze({ fire: "assault-rifle-fire.ogg", reload: "pistol-reload.ogg" }),
@@ -22,6 +22,7 @@ const FIRE_FALLBACK_WEAPON = Object.freeze({
 
 const decodedBuffers = new Map();
 const htmlAudioPools = new Map();
+const activeHtmlAudio = new WeakSet();
 let audioContext;
 let preloadPromise;
 
@@ -53,14 +54,23 @@ function prepareHtmlAudioPool(key, filename) {
   if (typeof Audio === "undefined" || htmlAudioPools.has(key)) return;
   const pool = [];
   for (let i = 0; i < 12; i += 1) {
-    const audio = new Audio();
-    audio.preload = "auto";
-    audio.volume = 1;
-    audio.src = assetUrl(filename);
-    audio.load();
-    pool.push(audio);
+    let audio;
+    try {
+      audio = new Audio();
+      audio.preload = "auto";
+      audio.volume = 1;
+      audio.src = assetUrl(filename);
+      audio.addEventListener("ended", () => activeHtmlAudio.delete(audio));
+      audio.addEventListener("error", () => activeHtmlAudio.delete(audio));
+      audio.addEventListener("abort", () => activeHtmlAudio.delete(audio));
+      audio.load();
+      pool.push(audio);
+    } catch (error) {
+      console.warn(`Não foi possível preparar o reprodutor HTML de ${filename}.`, error);
+      break;
+    }
   }
-  htmlAudioPools.set(key, pool);
+  if (pool.length > 0) htmlAudioPools.set(key, pool);
 }
 
 /**
@@ -128,16 +138,25 @@ function playHtmlAudio(key, fallback) {
   const pool = htmlAudioPools.get(key);
   if (!pool?.length) return false;
 
-  const audio = pool.find((item) => item.paused || item.ended) ?? pool[0];
+  // A media element may remain paused while play() is pending. Reserve it
+  // immediately so a second quick shot cannot reset the first sound.
+  const audio = pool.find((item) => !activeHtmlAudio.has(item) && (item.paused || item.ended))
+    ?? pool.find((item) => !activeHtmlAudio.has(item));
+  if (!audio) return false;
+
+  activeHtmlAudio.add(audio);
   try {
     audio.currentTime = 0;
     const result = audio.play();
     result?.catch((error) => {
+      activeHtmlAudio.delete(audio);
       console.warn(`O navegador recusou a reprodução HTML do som ${key}.`, error);
       fallback();
     });
+    if (!result && audio.paused) activeHtmlAudio.delete(audio);
     return true;
   } catch (error) {
+    activeHtmlAudio.delete(audio);
     console.warn(`Falha ao reproduzir o som HTML ${key}.`, error);
     fallback();
     return true;

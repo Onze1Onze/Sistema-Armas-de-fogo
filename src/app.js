@@ -10,9 +10,9 @@ import {
   remainingAmmo,
   reloadWeapon,
   selectWeapon,
-} from "./weapons.js?v=gm-audit-20261126-1";
-import { AMMO_SVGS } from "./ammunition.js?v=gm-audit-20261126-1";
-import { playBurst, playWeaponReload, playWeaponShot, preloadWeaponAudio } from "./sound.js?v=gm-audit-20261126-1";
+} from "./weapons.js?v=gm-audit-20261126-2";
+import { AMMO_SVGS } from "./ammunition.js?v=gm-audit-20261126-2";
+import { playBurst, playWeaponReload, playWeaponShot, preloadWeaponAudio } from "./sound.js?v=gm-audit-20261126-2";
 
 const METADATA_KEY = "com.onze1.ficha-onze.weapon-ammo";
 const PLAYER_NAME_KEY = "com.onze1.ficha-onze.weapon-ammo.player-name";
@@ -46,6 +46,9 @@ let isConnectingOwlbear = false;
 let pendingLocalOperations = [];
 let currentRole = "PLAYER";
 let gmPartyUnsubscribe;
+let playerChangeUnsubscribe;
+let isOpeningSimulator = false;
+let lifecycleCleanupRegistered = false;
 let isSimulatorMode = new URLSearchParams(window.location.search).get("mode") === "simulator";
 
 
@@ -119,25 +122,68 @@ function escapeHtml(value) {
 }
 
 async function openSimulator() {
-  if (!obr?.modal) {
-    window.location.assign("./?mode=simulator");
+  const simulatorUrl = new URL("./?mode=simulator", window.location.href).href;
+  if (typeof obr?.modal?.open !== "function") {
+    window.location.assign(simulatorUrl);
     return;
   }
-  await obr.modal.open({
-    id: "com.onze1.ficha-onze.arsenal-simulator",
-    url: new URL("./?mode=simulator", window.location.href).href,
-    width: 440,
-    height: 680,
-  });
+  if (isOpeningSimulator) return;
+
+  isOpeningSimulator = true;
+  try {
+    await obr.modal.open({
+      id: "com.onze1.ficha-onze.arsenal-simulator",
+      url: simulatorUrl,
+      width: 440,
+      height: 680,
+    });
+  } catch (error) {
+    console.warn("Não foi possível abrir o modal do simulador; abrindo a página local.", error);
+    window.location.assign(simulatorUrl);
+  } finally {
+    isOpeningSimulator = false;
+  }
+}
+
+function releaseOwlbearListeners() {
+  for (const unsubscribe of [gmPartyUnsubscribe, playerChangeUnsubscribe]) {
+    if (typeof unsubscribe !== "function") continue;
+    try {
+      unsubscribe();
+    } catch (error) {
+      console.warn("Não foi possível remover um listener do Owlbear Rodeo.", error);
+    }
+  }
+  gmPartyUnsubscribe = undefined;
+  playerChangeUnsubscribe = undefined;
+  lifecycleCleanupRegistered = false;
+}
+
+function registerOwlbearLifecycle() {
+  if (lifecycleCleanupRegistered) return;
+  window.addEventListener("pagehide", releaseOwlbearListeners, { once: true });
+  lifecycleCleanupRegistered = true;
 }
 
 async function setupGMDashboard() {
   showGMView();
-  const refresh = (players) => renderGMParty(players);
-  const players = await obr.party.getPlayers();
-  refresh(players);
+  gmPartyUnsubscribe?.();
+
+  // Subscribe before the initial read so a join/leave event cannot be lost
+  // between getPlayers() and onChange(). A newer event wins over a stale read.
+  let partyRevision = 0;
+  const refresh = (players) => {
+    partyRevision += 1;
+    renderGMParty(players);
+  };
   gmPartyUnsubscribe = obr.party.onChange(refresh);
+  const initialRevision = partyRevision;
+  const players = await obr.party.getPlayers();
+  if (partyRevision === initialRevision) refresh(players);
+
+  elements.gmSimulatorButton?.removeEventListener("click", openSimulator);
   elements.gmSimulatorButton?.addEventListener("click", openSimulator);
+  registerOwlbearLifecycle();
   setStorageStatus("obr");
 }
 
@@ -402,7 +448,8 @@ async function connectOwlbear() {
 
     // Player metadata belongs to the current Owlbear player, not to shared room state.
     // Each participant therefore writes only their own namespaced metadata entry.
-    candidate.player.onChange((player) => {
+    playerChangeUnsubscribe?.();
+    playerChangeUnsubscribe = candidate.player.onChange((player) => {
       void syncCurrentPlayerName(candidate.player, player?.metadata);
       const incoming = player?.metadata?.[METADATA_KEY];
       if (!incoming) return;
@@ -413,6 +460,7 @@ async function connectOwlbear() {
       lastSavedJSON = serialized;
       render();
     });
+    registerOwlbearLifecycle();
 
     isConnectingOwlbear = false;
     pendingLocalOperations = [];
@@ -424,6 +472,7 @@ async function connectOwlbear() {
   } catch (error) {
     isConnectingOwlbear = false;
     pendingLocalOperations = [];
+    releaseOwlbearListeners();
     console.warn("SDK do Owlbear indisponível; usando armazenamento local.", error);
     showPlayerView();
     return false;
@@ -431,7 +480,13 @@ async function connectOwlbear() {
 }
 
 async function start() {
-  preloadWeaponAudio();
+  try {
+    void preloadWeaponAudio().catch((error) => {
+      console.warn("A pré-carga dos sons falhou; a extensão continuará com os fallbacks.", error);
+    });
+  } catch (error) {
+    console.warn("A pré-carga dos sons não está disponível neste navegador.", error);
+  }
 
   // The simulator deliberately stays local so the GM can fire without modifying
   // the GM's player metadata or any player's real ammunition.
