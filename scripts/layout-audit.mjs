@@ -63,6 +63,9 @@ try {
       HTMLMediaElement.prototype.play = function () {
         const source = this.currentSrc || this.src;
         window.__playedWeaponSounds.push(new URL(source).pathname.split("/").pop());
+        // The production pool releases a player on the real ended event.
+        // Mirror that browser lifecycle instead of leaving every mock occupied.
+        queueMicrotask(() => this.dispatchEvent(new Event("ended")));
         return Promise.resolve();
       };
     });
