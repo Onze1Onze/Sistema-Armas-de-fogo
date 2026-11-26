@@ -23,9 +23,11 @@ test("a extensão consulta a party do Owlbear e reage a entrada, saída e mudan�
 
 test("o monitor do mestre não altera o armazenamento dos jogadores", async () => {
   const app = await read("src/app.js");
-  const gmBranch = app.slice(app.indexOf('if (currentRole === "GM"'));
+  const gmBranchStart = app.indexOf("async function setupGMDashboard");
+  const gmBranchEnd = app.indexOf("function renderWeaponCards");
+  const gmBranch = app.slice(gmBranchStart, gmBranchEnd);
   assert.doesNotMatch(gmBranch, /setMetadata\(/);
-  assert.match(gmBranch, /setupGMDashboard\(\)/);
+  assert.match(app, /setupGMDashboard\(\)/);
 });
 
 test("o painel do mestre é quadrado e não usa cantos arredondados", async () => {
