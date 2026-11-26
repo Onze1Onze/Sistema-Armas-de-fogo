@@ -52,12 +52,14 @@ let isSimulatorMode = new URLSearchParams(window.location.search).get("mode") ==
 
 
 function showPlayerView() {
+  document.body.classList.remove("role-pending");
   document.body.classList.remove("is-gm");
   elements.gmView?.classList.remove("is-visible");
   elements.gmView?.setAttribute("aria-hidden", "true");
 }
 
 function showGMView() {
+  document.body.classList.remove("role-pending");
   document.body.classList.add("is-gm");
   elements.gmView?.classList.add("is-visible");
   elements.gmView?.removeAttribute("aria-hidden");
